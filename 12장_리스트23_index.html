@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="UTF-8">
+	<title>COUNTER</title>
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+	<script type="text/javascript" src="./js/bignumber.min.js"></script>
+	<script type="text/javascript" src="./js/crypto-js.js"></script>
+	<script type="text/javascript" src="./js/utf8.js"></script>
+	<script type="text/javascript" src="./js/web3.min.js"></script>
+	<script>
+	// 연결할JSON-RPC서버(가상 머신)의 IP 주소 및 포트 번호
+	var url = "http://192.168.56.101:8545"
+	var user_name;
+	var web3 = new Web3();
+	var provider = new web3.providers.HttpProvider(url)
+	web3.setProvider(provider);
+	web3.eth.defaultAccount = web3.eth.accounts[0];
+	var ABI = [{"constant":false,"inputs":[],"name":"countUp","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"getCounterName","outputs":[{"name":"name","type":"bytes32"}],"type":"function"},{"constant":true,"inputs":[],"name":"getNumberOfCounter","outputs":[{"name":"number","type":"uint32"}],"type":"function"},{"uts":[{"name":"name","type":"bytes32"}],"type":"constructor"}];
+	var masterABI = [{"constant":true,"inputs":[],"name":"getCounterAddressList","outputs":[{"name":"counterAddressList","type":"address[]"}],"type":"function"},{"constant":false,"inputs":[{"name":"name","type":"bytes32"}],"name":"addCounter","outputs":[],"type":"function"}];
+	// 연결할 Contract(CounterMaster) 주소 
+	var master = web3.eth.contract(masterABI).at("0x8eace612cd955727327add697727fa35a082683a");
+	var CounterAddressList = master.getCounterAddressList();
+	// 로그인(Unlock)
+	function login() {
+	user_name = $("#userName").val();
+	var password = $("#password").val();
+	var JSONdata = createJSONdata("personal_unlockAccount", [ user_name, password, 30 ]);
+	executeJsonRpc(url, JSONdata, function success(data) {
+		// 로그인 성공
+		if (data.error == null) {
+			console.log("login success!");
+		} else {
+			// 로그인 실패
+			console.log("login error");
+		}
+		init();
+		}, function error(data) {
+			// 로그인 실패
+			console.log("login error");
+		});
+	}
+	// 초기화
+	function init() {
+	web3.eth.defaultAccount = user_name;
+	var table = document.getElementById('list');
+		for (var i = 0; i < CounterAddressList.length; i++) {
+			// 대상 후보자 계약 획득
+			var Counter = web3.eth.contract(ABI).at(CounterAddressList[i]);
+			//### HTML편집 table 행 추가, 편집 시작 ###
+			var row = table.insertRow();
+			var td = row.insertCell(0);
+			var radioButton1 = document.createElement('input');
+			radioButton1.type = 'radio';
+			radioButton1.name = 'CounterAddress';
+			radioButton1.value = CounterAddressList[i];
+			td.appendChild(radioButton1);
+			td = row.insertCell(1);
+			td.innerHTML = web3.toAscii(Counter.getCounterName());
+			td = row.insertCell(2);
+			td.innerHTML = Counter.getNumberOfCounter();
+			//### HTML편집 table 행 추가, 편집 끝 ###
+		}
+	}
+	// 업데이트
+	function refresh() {
+		web3.eth.defaultAccount = user_name;
+		//### HTML편집 table 행 삭제 시작 ###
+		var table = document.getElementById('list');
+		for (var i = CounterAddressList.length; i > 0; i--) {
+			table.deleteRow(i);
+		}
+		//### HTML편집 table 행 삭제 끝 ###
+		init();
+	}
+	//카운트 증가
+	function countUp() {
+		web3.eth.defaultAccount = user_name;
+		var targetAddress;
+		var CounterList = document.getElementsByName("CounterAddress");
+		for (i = 0; i < CounterList.length; i++) {
+			if (CounterList[i].checked) {
+				// 대상 후보자 계약 주소 획득
+				targetAddress = CounterList[i].value;
+			}
+		}
+		// 대상 후보자 계약 획득
+		var Counter = web3.eth.contract(ABI).at(targetAddress);
+		// 대상 후보자에게 투표
+		Counter.countUp();
+	}
+	// JSON 메시지 생성
+	function createJSONdata(method, params) {
+		var JSONdata = {
+			"jsonrpc" : "2.0",
+			"method" : method,
+			"params" : params
+			};
+		return JSONdata;
+	}
+	// JSON-RPC 실행
+	function executeJsonRpc(url_exec, JSONdata, success, error) {
+		$.ajax({
+			type : 'post',
+			url : url_exec,
+			data : JSON.stringify(JSONdata),
+			contentType : 'application/JSON',
+			dataType : 'JSON',
+			scriptCharset : 'utf-8',
+			success : function(data) {
+				success(data);
+			},
+			error : function(data) {
+				error(data);
+			}
+		});
+	}
+	</script>
+</head>
+<body>
+	<p>
+	사용자명:&nbsp;<input type="text" id="userName" value="0x835b3e4bd3b392d9475f1bceeb06523037108c23">&nbsp; 
+	패스워드:&nbsp;<input type="text" id="password" value="testuser2">&nbsp; <input type="button" value="login" onclick="login();" />
+	</p>
+	<table id="list" border="1">
+		<tr>
+			<th></th>
+			<th>name</th>
+			<th>number of counter</th>
+		</tr>
+	</table>
+	<br />
+	<input type="button" value="countUp" onclick="countUp();" />
+	<br />
+	<input type="button" value="refresh" onclick="refresh();" />
+</body>
+</html>
